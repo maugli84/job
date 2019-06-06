@@ -1,0 +1,96 @@
+#!/usr/bin/python3
+import cv2,os
+import numpy as np
+import time,serial
+
+threshold = 180000
+status    = 0
+
+def cylinder():
+    ser.open()
+    ser.write(b'a')
+    time.sleep(5)
+    ser.write(b'a')
+    ser.close()
+
+def cylinder2():
+    ser.open()
+    ser.write(b'b')
+    time.sleep(5)
+    ser.write(b'b')
+    ser.close()
+
+def diffImg(t0, t1, t2):
+    d1 = cv2.absdiff(t2, t1)
+    d2 = cv2.absdiff(t1, t0)
+    return cv2.bitwise_and(d1, d2)
+
+def auto_canny(image, sigma=0.33):
+    # compute the median of the single channel pixel intensities
+    v = np.median(image)
+ 
+    # apply automatic Canny edge detection using the computed median
+    lower = int(max(0, (1.0 - sigma) * v))
+    upper = int(min(255, (1.0 + sigma) * v))
+    edged = cv2.Canny(image, lower, upper)
+    return edged
+
+#serial init
+ser = serial.Serial()
+ser.baudrate = 9600
+ser.port = 'COM9'
+
+# capture image from cam
+cam =cv2.VideoCapture(0)#1 -web on compuetr,0 - wifi cam from phone  
+cv2.namedWindow("from cam")
+ret,frame = cam.read()
+
+
+
+
+
+t_minus = cv2.cvtColor(cam.read()[1], cv2.COLOR_RGB2GRAY)
+t = cv2.cvtColor(cam.read()[1], cv2.COLOR_RGB2GRAY)
+t_plus = cv2.cvtColor(cam.read()[1], cv2.COLOR_RGB2GRAY)
+
+#print (ret)
+while 1:
+    ret,frame = cam.read()
+    if status  == 1:
+        print("take photo")
+        t=time.asctime()
+        ta =  t.split(" ")[-2].split(":") 
+        ba =  ta[0]+"-"+ta[1]+"-"+ta[2] +".png" 
+        cv2.imwrite(ba,frame)
+        os.system("python dimentions2.py {}".format(ba))
+        status = 0
+        
+        t_minus = cv2.cvtColor(cam.read()[1], cv2.COLOR_RGB2GRAY)
+        t = cv2.cvtColor(cam.read()[1], cv2.COLOR_RGB2GRAY)
+        t_plus = cv2.cvtColor(cam.read()[1], cv2.COLOR_RGB2GRAY)
+    
+    cv2.namedWindow("from cam")
+    cv2.imshow("from cam", diffImg(t_minus, t, t_plus) )
+    t_minus = t
+    t = t_plus
+    t_plus = cv2.cvtColor(cam.read()[1], cv2.COLOR_RGB2GRAY)
+    totalDiff = cv2.countNonZero(diffImg(t_minus, t, t_plus)) 
+    # print (totalDiff)
+    
+    if totalDiff  >=   threshold :
+        # print ('motion detected')
+        # font = cv2.FONT_HERSHEY_SIMPLEX
+        # cv2.putText(frame,"MOTION",(100,100), font, 2,(0,255,0),4,cv2.LINE_AA)
+        cv2.waitKey(5000)
+        print("delay complete")
+        ret,frame = cam.read()
+        status = 1        
+    
+    
+    cv2.imshow("cam",frame)
+    key = cv2.waitKey(10)
+    if key ==27:
+        cv2.destroyWindow("from cam")
+        cam.release()
+
+        break       
